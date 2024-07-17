@@ -6,6 +6,42 @@ deep learning researchers.
 See the [course website](https://far.in.net/hijax) for details or to express
 interest.
 
+<table><tbody>
+  <tr>
+    <td>
+      <img src="demos/workshop1.png" alt="workshop 1 visualisation" width="30%">
+    </td>
+    <td>
+      <img src="demos/workshop2.gif" alt="workshop 2 visualisation" width="30%">
+    </td>
+    <td>
+      <!--workshop 3-->
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <!--workshop 4-->
+    </td>
+    <td>
+      <!--workshop 5-->
+    </td>
+    <td>
+      <!--workshop 6-->
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <!--workshop 7-->
+    </td>
+    <td>
+      <!--workshop 8-->
+    </td>
+    <td>
+      <!--workshop 9-->
+    </td>
+  </tr>
+</tbody></table>
+
 Contents of this repository
 ---------------------------
 
