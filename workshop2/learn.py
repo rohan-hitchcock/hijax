@@ -1,12 +1,5 @@
 """
 Teacher-student perceptron learning, vanilla JAX.
-
-Notes:
-
-* did anyone try the challenge from last week?
-* new dependency `pip install plotille` for easy-ish plotting
-* workshop 2 demo: stochastic gradient descent
-* challenge 2: multi-layer perceptron!
 """
 
 import time
@@ -28,8 +21,73 @@ def main(
     learning_rate: float = 0.01,
     seed: int = 0,
 ):
-    pass # TODO!
+    key = jax.random.key(seed)
 
+    key_init_student, key = jax.random.split(key)
+    w = init_params(key_init_student)
+
+    key_init_teacher, key = jax.random.split(key)
+    w_star = init_params(key_init_teacher)
+
+    print(vis(student=w, teacher=w_star, overwrite=False))
+
+    val_grad_loss = jax.value_and_grad(loss)
+
+    for t in tqdm.trange(num_steps):
+        
+        # sample a singe data point (i.e. original SGD, not minibatch)
+        key_data_t, key = jax.random.split(key)
+        x = jax.random.normal(key_data_t)
+
+        # compute the gradient of the loss wrt w
+        l, g = val_grad_loss(w, w_star, x)
+        
+        # update w 
+        w = (w[0] - learning_rate * g[0], w[1] - learning_rate * g[1])
+
+
+        # update our visualisation
+        tqdm.tqdm.write(vis(student=w, teacher=w_star, x=x))
+        tqdm.tqdm.write(
+            f'x: {x:+.3f} | loss: {l:.3f} | '
+            + f'a {w[0]:+.3f} | b {w[1]:+.3f} '
+            + f'a* {w_star[0]:+.3f} | b* {w_star[1]:+.3f} '
+        )
+
+        # time.sleep(0.5)
+        
+
+def loss(w, w_star, x):
+    y = forward_pass(w, x)
+    y_star = forward_pass(w_star, x)
+
+    # mean is not needed here (has no effect, but would be used in minibatch)
+    loss = jnp.mean((y - y_star) ** 2)
+    return loss
+
+
+def init_params(key):
+    """ Idiomatic in deep learning with jax. Used to initialise the parameters 
+        of a network
+    """
+
+    key_a, key = jax.random.split(key)
+    a = jax.random.normal(key_a)
+
+    key_b, key = jax.random.split(key)
+    b = jax.random.normal(key_b)
+
+    # Or...
+    # a, b = jax.random.normal(key, shape=(2,))
+
+    return a, b
+
+def forward_pass(w, x):
+    """ Idiomatic in deep learning with jax. Used to define how the model works 
+        on a single input `x`. Here `w` is the weights of the network.
+    """
+    a, b = w        # in this problem we have two weights
+    return a * x + b
 
 # # # 
 # Perceptron architecture
