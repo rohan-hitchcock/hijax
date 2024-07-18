@@ -1,8 +1,8 @@
-
 import jax
 import jax.numpy as jnp
 import tqdm
 
+import tyro
 import plotille
 
 def init_weights(key, in_dim, hidden_dim):
@@ -66,7 +66,7 @@ class ExponentialMovingAverage:
     def __format__(self, format_spec):
         return f"{float(self):{format_spec}}"
 
-def train(seed, num_steps, batch_size, in_dim, hidden_dim, learning_rate, logging_rate=100):
+def train(seed: int, num_steps: int, batch_size: int = 32, in_dim: int = 5, hidden_dim: int = 2, learning_rate: float = 0.01, logging_rate: int = 100):
 
     key = jax.random.key(seed)
     key_data, key = jax.random.split(key)
@@ -131,20 +131,4 @@ def line(end, start=None, samples=50):
     return alpha * start + (1 - alpha) * end
 
 if __name__ == "__main__":
-
-    seed = 1000
-    batch_size = 8
-    in_dim = 5
-    hidden_dim = 2
-    learning_rate = 0.01
-    num_steps = 10000
-    batch_size = 32
-
-    train(seed, num_steps, batch_size, in_dim, hidden_dim, learning_rate)
-
-
-
-
-
-
-
+    tyro.cli(train)
