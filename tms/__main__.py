@@ -8,7 +8,7 @@ from pathlib import Path
 
 import jax
 
-from . import model
+from .model import TMSModel, loss
 from . import plotting
 from .llc import estimate_llc
 from .train import train
@@ -60,7 +60,7 @@ def create_unique_subdirectory(base_dir, max_tries=100):
 
 def get_checkpoints(directory):
     
-    checkpoint_pattern = re.compile(r'step=(\d+)\.ckpt')
+    checkpoint_pattern = re.compile(r'step=(\d+)\.npz')
     checkpoint_files = []
 
     directory_path = Path(directory)
@@ -69,7 +69,7 @@ def get_checkpoints(directory):
         if filepath.is_file():
             match = checkpoint_pattern.match(filepath.name)
             if match:
-                step = int(match.group(2))
+                step = int(match.group(1))
                 checkpoint_files.append((step, str(filepath)))
 
     return checkpoint_files
@@ -80,6 +80,8 @@ def replay_training(run_dir):
 
     steps = llc_df['step'].to_numpy()
     llcs = llc_df['llc'].to_numpy()
+
+    print(llcs.shape)
 
     llc_max = llcs.max()
     step_max = steps.max()
@@ -145,7 +147,7 @@ llc_group.add_argument('--llc_seed', type=int, default=0)
 args = parser.parse_args()
 
 
-run_dir = create_unique_subdirectory('./runs')
+run_dir = create_unique_subdirectory('./tms/runs')
 checkpoint_dir = os.path.join(run_dir, 'checkpoints')
 os.makedirs(checkpoint_dir)
 
@@ -175,12 +177,18 @@ key, llc_key = jax.random.split(key)
 llc_data = generate_dataset(llc_key, args.in_dim, args.batch_size, args.num_chains * (args.num_draws + args.num_burnin_steps))
 llc_data = llc_data.reshape(args.num_chains, args.num_draws + args.num_burnin_steps, args.batch_size, args.in_dim)
 
-for ckpt_id, step, ckpt_file in enumerate(sorted(get_checkpoints(checkpoint_dir))):
-    weights = model.load_model(ckpt_file)
 
-    llc, _ = estimate_llc(weights, llc_data, model.loss, args.epsilon, args.gamma, args.beta, args.num_burnin_steps)
+
+for step, ckpt_file in sorted(get_checkpoints(checkpoint_dir)):
+    
+    
+    model = TMSModel.load(ckpt_file)
+
+    llc, _ = estimate_llc(model, llc_data, loss, args.epsilon, args.gamma, args.beta, args.num_burnin_steps)
     llc_results['step'].append(step)
     llc_results['llc'].append(llc.item())
+
+    
 
 llc_results_df = pd.DataFrame(llc_results)
 llc_results_df.to_csv(os.path.join(run_dir, 'llc.csv'))

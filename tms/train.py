@@ -5,7 +5,7 @@ import tqdm
 
 import tyro
 
-from tms import model
+from tms.model import TMSModel, loss
 from tms.samplers import gradient_descent_step
 from tms.data import generate_dataset
 
@@ -33,25 +33,25 @@ def train(key, num_steps: int, batch_size: int = 32, in_dim: int = 5, hidden_dim
     data = generate_dataset(key_data, in_dim, batch_size, num_steps)
 
     key_weight, key = jax.random.split(key)
-    weights = model.init_weights(key_weight, in_dim, hidden_dim)
+    model = TMSModel.initialize(key_weight, in_dim, hidden_dim)
 
-    val_grad_loss = jax.value_and_grad(model.loss)
+    val_grad_loss = jax.value_and_grad(loss)
 
     ema_loss = ExponentialMovingAverage()
     with tqdm.tqdm(enumerate(data), total=len(data)) as pbar:
         for step, batch in pbar:
-            l, g = val_grad_loss(weights, batch)
+            l, g = val_grad_loss(model, batch)
             ema_loss.update(l)
 
-            weights = gradient_descent_step(weights, g, learning_rate)
+            model = gradient_descent_step(model, g, learning_rate)
 
             if checkpoint_dir is not None and step % checkpoint_rate == 0:
                 checkpoint_path = os.path.join(checkpoint_dir, f'step={step}.npz')
-                model.save_model(checkpoint_path, weights)
+                model.save(checkpoint_path)
             
             pbar.set_postfix({'loss': f'{ema_loss:.3f}'})
 
-    return weights
+    return model
 
 if __name__ == "__main__":
     tyro.cli(train)

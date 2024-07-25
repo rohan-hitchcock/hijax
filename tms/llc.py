@@ -13,6 +13,8 @@ def sgld_chain(init_weight, data, loss_fn, learning_rate, gamma, beta):
     def chain_step(w, x):
 
         loss, grad_loss = val_grad_loss_fn(w, x)
+
+        # BUG need to pass key to sgld step
         w = sgld_step(w, init_weight, grad_loss, learning_rate, gamma, beta)
 
         return w, loss
@@ -33,26 +35,46 @@ def llc_moving_mean(init_loss, loss_trace, beta):
 
 def sgld_multichain(init_weight, data_by_chain, loss_fn, learning_rate, gamma, beta):
 
-    return jax.vmap(sgld_multichain, in_axes=(None, 0, None, None, None, None))(
-        init_weight=init_weight, 
-        data=data_by_chain, 
-        loss_fn=loss_fn, 
-        learning_rate=learning_rate, 
-        gamma=gamma, 
-        beta=beta,
+    return jax.vmap(sgld_chain, (None, 0, None, None, None, None))(
+        init_weight, 
+        data_by_chain, 
+        loss_fn, 
+        learning_rate, 
+        gamma, 
+        beta,
     )
 
 
 def estimate_llc(init_weight, data_by_chain, loss_fn, epsilon, gamma, beta, num_burnin_steps):
 
-    loss_traces = jax.vmap(sgld_multichain, in_axes=(None, 0, None, None, None, None))(
+    print("Function called with:")
+    print(f"init_weight: {type(init_weight)}")
+    print(f"data_by_chain: {type(data_by_chain)}")
+    print(f"loss_fn: {type(loss_fn)}")
+    print(f"epsilon: {epsilon}")
+    print(f"gamma: {gamma}")
+    print(f"beta: {beta}")
+    print(f"num_burnin_steps: {num_burnin_steps}")
+
+    
+    loss_traces = jax.vmap(sgld_multichain, (None, 0, None, None, None, None))(
+        init_weight,
+        data_by_chain,
+        loss_fn,
+        epsilon,
+        gamma,
+        beta
+    )
+
+
+    """loss_traces = jax.vmap(sgld_multichain, (None, 0, None, None, None, None))(
         init_weight=init_weight, 
         data=data_by_chain, 
         loss_fn=loss_fn, 
         learning_rate=epsilon, 
         gamma=gamma, 
         beta=beta,
-    )
+    )"""
 
     init_losses = loss_traces[:, 0]
     draws = loss_traces[:, num_burnin_steps:]
