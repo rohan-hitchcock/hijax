@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 
-from samplers import sgld_step
+from tms.samplers import sgld_step
 
 
 def sgld_chain(init_weight, data, loss_fn, learning_rate, gamma, beta):
@@ -17,7 +17,7 @@ def sgld_chain(init_weight, data, loss_fn, learning_rate, gamma, beta):
 
         return w, loss
 
-    trace = jax.lax.scan(chain_step, init_weight, data)
+    _, trace = jax.lax.scan(chain_step, init_weight, data)
 
     return trace
 
@@ -41,3 +41,21 @@ def sgld_multichain(init_weight, data_by_chain, loss_fn, learning_rate, gamma, b
         gamma=gamma, 
         beta=beta,
     )
+
+
+def estimate_llc(init_weight, data_by_chain, loss_fn, epsilon, gamma, beta, num_burnin_steps):
+
+    loss_traces = jax.vmap(sgld_multichain, in_axes=(None, 0, None, None, None, None))(
+        init_weight=init_weight, 
+        data=data_by_chain, 
+        loss_fn=loss_fn, 
+        learning_rate=epsilon, 
+        gamma=gamma, 
+        beta=beta,
+    )
+
+    init_losses = loss_traces[:, 0]
+    draws = loss_traces[:, num_burnin_steps:]
+    llc = jax.vmap(llc_mean, in_axes=(0, 0, None))(init_losses, draws, beta)
+
+    return llc, loss_traces

@@ -24,3 +24,18 @@ def forward_pass(tms_weights, x):
 def loss(w, x):
     x_pred = forward_pass(w, x)
     return jnp.mean((x - x_pred) ** 2)
+
+def save_model(filepath, weights):
+
+    if not filepath.endswith('.npz'):
+        filepath = filepath + '.npz'
+
+    jnp.savez(filepath, matrix=weights.matrix, bias=weights.bias)
+
+def load_model(filepath):
+    data = jnp.load(filepath)
+    weights = TMSWeights(
+        matrix=data['matrix'], 
+        bias=data['bias']
+    )
+    return weights
