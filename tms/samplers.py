@@ -1,7 +1,5 @@
 import jax
-
-from typing import List
-from jax.typing import ArrayLike
+import jax.numpy as jnp
 
 def gradient_descent_step(weights, grad_weights, learning_rate):
     update_weight = lambda w, grad_w : w - learning_rate * grad_w
@@ -13,7 +11,7 @@ def sgld_step(key, weights, initial_weights, grad_weights, learning_rate, gamma,
 
     def update_weight(w, w_0, grad_w, key):
 
-        noise = jax.sqrt(learning_rate * noise_level) * jax.random.normal(key, shape=w.shape)
+        noise = jnp.sqrt(learning_rate * noise_level) * jax.random.normal(key, shape=w.shape)
 
         dw = - (learning_rate / 2) * (gamma * (w - w_0) + beta * grad_w) + noise
 

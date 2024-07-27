@@ -42,14 +42,8 @@ class TMSModel:
 
     @classmethod
     def load(cls, filepath):
-
-        print(filepath)
-
         data = jnp.load(filepath)
-        model = cls(
-            matrix= data['matrix'], 
-            bias=data['bias']
-        )
+        model = cls(matrix=data['matrix'], bias=data['bias'])
         return model
 
 def loss(model: TMSModel, x: Array):

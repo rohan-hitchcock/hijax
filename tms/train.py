@@ -38,7 +38,7 @@ def train(key, num_steps: int, batch_size: int = 32, in_dim: int = 5, hidden_dim
     val_grad_loss = jax.value_and_grad(loss)
 
     ema_loss = ExponentialMovingAverage()
-    with tqdm.tqdm(enumerate(data), total=len(data)) as pbar:
+    with tqdm.tqdm(enumerate(data), total=len(data), desc='Training', unit='step') as pbar:
         for step, batch in pbar:
             l, g = val_grad_loss(model, batch)
             ema_loss.update(l)

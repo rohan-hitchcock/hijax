@@ -5,6 +5,8 @@ import re
 import pandas as pd
 import plotille
 from pathlib import Path
+import tqdm
+import time
 
 import jax
 
@@ -81,16 +83,14 @@ def replay_training(run_dir):
     steps = llc_df['step'].to_numpy()
     llcs = llc_df['llc'].to_numpy()
 
-    print(llcs.shape)
+    llc_max = llcs.max().item()
+    step_max = steps.max().item()
 
-    llc_max = llcs.max()
-    step_max = steps.max()
-
-    for i in range(len(steps)):
+    for i in tqdm.trange(len(steps), desc='Training (replay)', unit='ckpt'):
         step = steps[i]
 
         ckpt_file = os.path.join(run_dir, f'checkpoints/step={step}.npz')
-        weights = model.load_model(ckpt_file)
+        weights = TMSModel.load(ckpt_file)
 
         weights_fig_str = plotting.get_weights_figure(weights)
 
@@ -102,18 +102,18 @@ def replay_training(run_dir):
         llc_fig.set_x_limits(0, step_max)
         llc_fig.set_y_limits(0, llc_max)
         
-        llc_fig.plot(steps[:i], llcs[:i], lc='g')
+        llc_fig.plot(steps[:i], llcs[:i], lc='green')
 
-        llc_fig_str = str(llc_fig)
+        llc_fig_str = str(llc_fig.show())
 
         fig_str = f"{weights_fig_str}\n{llc_fig_str}"
 
         if i != 0:
             fig_str = plotting.add_overwrite(fig_str)
         
-        print(fig_str)
+        tqdm.tqdm.write(fig_str)
 
-
+        time.sleep(0.2)
     
 
 parser = argparse.ArgumentParser(description="Training script")
@@ -155,7 +155,7 @@ os.makedirs(checkpoint_dir)
 key = jax.random.key(args.seed)
 key, train_key = jax.random.split(key)
 
-print("Training model...")
+
 train(
     key=train_key, 
     num_steps=args.num_steps, 
@@ -172,21 +172,24 @@ llc_results = {
     'llc': []
 }
 
-key, llc_key = jax.random.split(key)
+key, key_llc_data = jax.random.split(key)
 
-llc_data = generate_dataset(llc_key, args.in_dim, args.batch_size, args.num_chains * (args.num_draws + args.num_burnin_steps))
+llc_data = generate_dataset(key_llc_data, args.in_dim, args.batch_size, args.num_chains * (args.num_draws + args.num_burnin_steps))
 llc_data = llc_data.reshape(args.num_chains, args.num_draws + args.num_burnin_steps, args.batch_size, args.in_dim)
 
 
 
-for step, ckpt_file in sorted(get_checkpoints(checkpoint_dir)):
+for step, ckpt_file in tqdm.tqdm(sorted(get_checkpoints(checkpoint_dir)), desc='LLC estimation', unit='ckpt'):
     
     
     model = TMSModel.load(ckpt_file)
 
-    llc, _ = estimate_llc(model, llc_data, loss, args.epsilon, args.gamma, args.beta, args.num_burnin_steps)
+    key, key_llc_estimate = jax.random.split(key)
+    llcs, _ = estimate_llc(key_llc_estimate, model, llc_data, loss, args.epsilon, args.gamma, args.beta, args.num_burnin_steps)
+
+    
     llc_results['step'].append(step)
-    llc_results['llc'].append(llc.item())
+    llc_results['llc'].append(llcs.mean().item())
 
     
 
