@@ -46,6 +46,6 @@ class TMSModel:
         model = cls(matrix=data['matrix'], bias=data['bias'])
         return model
 
-def loss(model: TMSModel, x: Array):
+def loss_fn(model: TMSModel, x: Array):
     x_pred = model(x)
     return jnp.mean((x - x_pred) ** 2)

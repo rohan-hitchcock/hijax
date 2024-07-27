@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 
 from tms.samplers import sgld_step
-
+from functools import partial
 
 def sgld_chain(key, init_weight, data, loss_fn, learning_rate, gamma, beta):
 
@@ -34,7 +34,7 @@ def llc_moving_mean(init_loss, loss_trace, beta):
     moving_mean_loss = jnp.cumsum(loss_trace) / (jnp.arange(len(loss_trace)) + 1)
     return beta * (moving_mean_loss - init_loss)
 
-
+@partial(jax.jit, static_argnames=['loss_fn', 'num_burnin_steps'])
 def estimate_llc(key, init_weight, data_by_chain, loss_fn, epsilon, gamma, beta, num_burnin_steps):
 
     # compute multiple different chains    

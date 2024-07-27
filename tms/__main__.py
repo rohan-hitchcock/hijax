@@ -10,7 +10,7 @@ import time
 
 import jax
 
-from .model import TMSModel, loss
+from .model import TMSModel, loss_fn
 from . import plotting
 from .llc import estimate_llc
 from .train import train
@@ -113,7 +113,7 @@ def replay_training(run_dir):
         
         tqdm.tqdm.write(fig_str)
 
-        time.sleep(0.2)
+        time.sleep(0.1)
     
 
 parser = argparse.ArgumentParser(description="Training script")
@@ -185,7 +185,7 @@ for step, ckpt_file in tqdm.tqdm(sorted(get_checkpoints(checkpoint_dir)), desc='
     model = TMSModel.load(ckpt_file)
 
     key, key_llc_estimate = jax.random.split(key)
-    llcs, _ = estimate_llc(key_llc_estimate, model, llc_data, loss, args.epsilon, args.gamma, args.beta, args.num_burnin_steps)
+    llcs, _ = estimate_llc(key_llc_estimate, model, llc_data, loss_fn, args.epsilon, args.gamma, args.beta, args.num_burnin_steps)
 
     
     llc_results['step'].append(step)
@@ -197,7 +197,3 @@ llc_results_df = pd.DataFrame(llc_results)
 llc_results_df.to_csv(os.path.join(run_dir, 'llc.csv'))
 
 replay_training(run_dir)
-
-
-
-

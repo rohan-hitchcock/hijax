@@ -1,5 +1,7 @@
 import jax
 import jax.numpy as jnp
+from functools import partial
+
 
 def generate_vector(key, n):
 
@@ -11,9 +13,11 @@ def generate_vector(key, n):
 
     return jnp.zeros(n).at[i].set(length)
 
+
 def generate_batch(key, n, batch_size):
     keys = jax.random.split(key, batch_size)
     return jax.vmap(generate_vector, in_axes=(0, None))(keys, n)
+
 
 def generate_dataset(key, n, batch_size, dataset_size):
     keys = jax.random.split(key, dataset_size)
