@@ -44,6 +44,7 @@ def train(key, num_steps: int, batch_size: int = 32, in_dim: int = 5, hidden_dim
 
     key_weight, key = jax.random.split(key)
     model = TMSModel.initialize(key_weight, in_dim, hidden_dim)
+    # model = TMSModel.initialize_triangle(key_weight, in_dim)
 
 
     ema_loss = ExponentialMovingAverage()
