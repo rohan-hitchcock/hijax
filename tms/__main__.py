@@ -86,17 +86,29 @@ def replay_training(run_dir):
     llc_max = llcs.max().item()
     step_max = steps.max().item()
 
+    num_ckpts = len(steps)
+
+    
+    next_weight_freeze = num_ckpts // 3
+    weight_history_fig = ''
+
+
     for i in tqdm.trange(len(steps), desc='Training (replay)', unit='ckpt'):
         step = steps[i]
 
         ckpt_file = os.path.join(run_dir, f'checkpoints/step={step}.npz')
         weights = TMSModel.load(ckpt_file)
 
-        weights_fig_str = plotting.get_weights_figure(weights)
+        weights_fig_str = plotting.get_weights_figure(weights, title=f"Step {step}")
+
+        if i == next_weight_freeze + 1:
+            weight_history_fig = plotting.stack_figures_horizontally([weight_history_fig, weights_fig_str])
+            next_weight_freeze += num_ckpts // 3
+
 
         llc_fig = plotille.Figure()
-        llc_fig.width = 40
-        llc_fig.height = 15
+        llc_fig.width = 180
+        llc_fig.height = 30
         llc_fig.x_label = 'Training step'
         llc_fig.y_label = 'LLC'
         llc_fig.set_x_limits(0, step_max)
@@ -106,13 +118,19 @@ def replay_training(run_dir):
 
         llc_fig_str = str(llc_fig.show())
 
-        fig_str = f"{weights_fig_str}\n{llc_fig_str}"
+        
+        fig_str = plotting.arange_figures(
+            [
+                [weight_history_fig, weights_fig_str],
+                [llc_fig_str]
+            ]
+        )
 
         if i != 0:
             fig_str = plotting.add_overwrite(fig_str)
         
         tqdm.tqdm.write(fig_str)
-
+        
         time.sleep(0.1)
     
 
