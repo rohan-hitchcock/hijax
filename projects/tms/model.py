@@ -9,7 +9,7 @@ from functools import partial
 
 from jaxtyping import Array, PRNGKeyArray as Key
 
-from tms.utils import register_model
+from shared.utils import register_model
 
 @register_model(weights=['matrix', 'bias'])
 class TMSModel:
