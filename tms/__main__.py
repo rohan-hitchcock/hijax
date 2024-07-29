@@ -118,7 +118,7 @@ def replay_training(run_dir):
         llc_fig_str = str(llc_fig.show())
 
         
-        fig_str = plotting.arange_figures(
+        fig_str = plotting.arrange_figures(
             [
                 [weight_history_fig, weights_fig_str],
                 [llc_fig_str]

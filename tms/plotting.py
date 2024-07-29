@@ -1,16 +1,13 @@
+import re
+from itertools import zip_longest
+from typing import List, Literal
+
 import jax
 import jax.numpy as jnp
 import plotille
 
-from itertools import zip_longest
-from typing import List
-
-
-from typing import Literal
-
-import re
-
 from .llc import llc_moving_mean
+
 
 def line(end, start=None, samples=50):
 
@@ -45,45 +42,34 @@ def get_weights_figure(weights, title=''):
 
 def plot_sweep(sweep_results, epsilons, gammas, betas):
 
-
-
     sweep_figs = []
-
     for i_b, beta in enumerate(betas):
 
-
         sup_fig = []
-
         for i_e, epsilon in enumerate(epsilons):
-            
-            
+              
             sup_fig.append([]) # add a row
-
             for i_g, gamma in enumerate(gammas):
 
                 fig = plotille.Figure()
                 fig.width = 40
                 fig.height = 15
-                
-                
+                               
                 traces = sweep_results[i_e, i_g, i_b] # [C, D]
 
                 init_losses = traces[:, 0]
 
                 moving_llc_means = jax.vmap(llc_moving_mean, (0, 0, None))(init_losses, traces, beta) # [C, D]
 
-
                 for chain in moving_llc_means:
                     fig.plot(jnp.arange(len(chain)), chain)
 
                 fig.set_x_limits(0, int(traces.shape[1]))
                 fig.set_y_limits(0, moving_llc_means.max().item())
-                
 
                 sup_fig[-1].append(f"b={beta:.2e}, e={epsilon:.2e}, g={gamma:.2e}\n{str(fig.show())}")
 
-
-        sweep_figs.append(arange_figures(sup_fig))
+        sweep_figs.append(arrange_figures(sup_fig))
 
     return sweep_figs
 
@@ -91,8 +77,10 @@ def plot_sweep(sweep_results, epsilons, gammas, betas):
 def add_overwrite(figure_str):
     return f"\x1b[{len(figure_str.splitlines())}A" + figure_str
 
+
 def stack_figures_vertically(figure_strings: List[str]):
     return '\n'.join(fs for fs in figure_strings if fs != '')
+
 
 def stack_figures_horizontally(figure_strings: List[str]):
 
@@ -112,9 +100,8 @@ def stack_figures_horizontally(figure_strings: List[str]):
     return '\n'.join(supfig_lines)
 
 
-def arange_figures(figure_strings: List[List[str]]) -> str:
+def arrange_figures(figure_strings: List[List[str]]) -> str:
     return stack_figures_vertically([stack_figures_horizontally(fig_row) for fig_row in figure_strings])
-
 
 
 def pad_to_width(string: str, length: int, padding: str = ' ', padding_mode: Literal['left', 'right'] = 'right') -> str:
@@ -125,10 +112,12 @@ def pad_to_width(string: str, length: int, padding: str = ' ', padding_mode: Lit
     padding_string = num_padding * padding 
     return f"{padding_string}{string}" if padding_mode == 'left' else f"{string}{padding_string}"
 
+
 def strip_formatting(text):
     # currently only handles basic color formatting
     color_escape = re.compile(r'\x1B\[\d+m')
     return color_escape.sub('', text)
+
 
 def line_width(line):
     return len(strip_formatting(line))
