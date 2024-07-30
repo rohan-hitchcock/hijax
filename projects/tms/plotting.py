@@ -112,10 +112,9 @@ def pad_to_width(string: str, length: int, padding: str = ' ', padding_mode: Lit
     padding_string = num_padding * padding 
     return f"{padding_string}{string}" if padding_mode == 'left' else f"{string}{padding_string}"
 
-
+# currently only handles basic color formatting 
+color_escape = re.compile(r'\x1B\[\d+m')
 def strip_formatting(text):
-    # currently only handles basic color formatting
-    color_escape = re.compile(r'\x1B\[\d+m')
     return color_escape.sub('', text)
 
 
