@@ -5,9 +5,9 @@
     (2024) "Estimating the Local Learning Coefficient at Scale".
 
     In the notation of Furman and Lau, this function finds the set of indices 
-    \Sigma satisfying the constraints outlined in Theorem B.1 and returns 
-    \Delta_\Sigma := \{\Delta_s : s \in \Sigma\}, where 
-    \Delta = \{\Delta_0, ... \Delta_M\}. This set is the component of the 
+    Sigma satisfying the constraints outlined in Theorem B.1 and returns 
+    Delta_Sigma := {Delta_s : s in Sigma}, where 
+    Delta = {Delta_0, ... Delta_M}. This set is the component of the 
     constraint satisfaction problem which is actually required to compute the 
     LLC of a DLN. 
 """

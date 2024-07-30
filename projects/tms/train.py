@@ -7,27 +7,10 @@ import tyro
 from functools import partial
 
 
+from shared.utils import ExponentialMovingAverage
 from tms.model import TMSModel, loss_fn
-from tms.samplers import gradient_descent_step
+from shared.samplers import gradient_descent_step
 from tms.data import generate_dataset
-
-
-class ExponentialMovingAverage:
-    def __init__(self, decay=0.95):
-        self.decay = decay
-        self.value = None
-
-    def update(self, new_value):
-        if self.value is None:
-            self.value = new_value
-        else:
-            self.value = self.decay * self.value + (1 - self.decay) * new_value
-
-    def __float__(self):
-        return float(self.value) if self.value is not None else 0.0
-
-    def __format__(self, format_spec):
-        return f"{float(self):{format_spec}}"
 
 
 @partial(jax.jit, static_argnames=['loss_fn'])

@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 
-from tms.samplers import sgld_step
+from shared.samplers import sgld_step
 from functools import partial
 
 def sgld_chain(key, init_weight, data, loss_fn, learning_rate, gamma, beta):
