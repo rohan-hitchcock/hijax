@@ -2,5 +2,5 @@
 env
 __pycache__
 
-tms/runs
+projects/tms/runs/*
 *.npz
