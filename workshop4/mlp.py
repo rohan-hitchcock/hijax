@@ -54,7 +54,7 @@ class Subsample2x2(eqx.Module):
         self.biases = jnp.zeros((num_channels, 1, 1))
 
 
-    def __call__(self, x: Float[Array, "c h w"]) -> Float[Array, "c h w"]:
+    def __call__(self, x: Float[Array, "c h w"]) -> Float[Array, "c h//2 w//2"]:
         sums = einops.reduce(x, 'c (h 2) (w 2) -> c h w', 'sum')
         return self.weights * sums + self.biases
 
@@ -70,30 +70,58 @@ class SimpLeNet(eqx.Module):
 
 
     def __init__(self, key: PRNGKeyArray):
-        raise NotImplementedError
+    
+        k1, k2, k3, k4, k5 = jax.random.split(key, num=5)
+
+        self.C1 = eqx.nn.Conv2d(1, 6, kernel_size=5, padding=2, key=k1)
+        self.S2 = Subsample2x2(num_channels=6)
+        self.C3 = eqx.nn.Conv2d(6, 16, kernel_size=5, padding=0, key=k2)
+        self.S4 = Subsample2x2(num_channels=16)
+        self.C5 = eqx.nn.Conv2d(16, 120, kernel_size=5, padding=0, key=k3)
+        self.F6 = eqx.nn.Linear(120, 84, key=k4)
+        self.Out = eqx.nn.Linear(84, 10, key=k5)
 
 
     def forward(
         self,
         image: Float[Array, "28 28"],
     ) -> Float[Array, "10"]:
-        raise NotImplementedError
+
         # Input:         1x28x28
+        x = einops.rearrange(image, 'h w -> 1 h w')
+        
         # C1:       ->   6x28x28
+        x = scaled_tanh(self.C1(x))
+
         # S2:       ->   6x14x14
+        x = scaled_tanh(self.S2(x))
+
         # C3*:      ->  16x10x10 (note: fully connected channels)
+        x = scaled_tanh(self.C3(x))
+
         # S4:       ->  16x5x5
+        x = scaled_tanh(self.S4(x))
+
         # C5:       -> 120x1x1 (note: equiv. dense 400->120 at this size)
+        x = scaled_tanh(self.C5(x))
+
         # (flatten) -> 120
+        x = jnp.ravel(x)
+
         # F6:       -> 84
+        x = scaled_tanh(self.F6(x))
+
         # Output*:  -> 10 (note: learned map, no hand-made RBF code)
+        x = self.Out(x)
+
+        return jax.nn.softmax(x)
 
 
     def forward_batch(
         self,
         x_batch: Float[Array, "b 28 28"],
     ) -> Float[Array, "b 10"]:
-        raise NotImplementedError
+        return jax.vmap(self.forward)(x_batch)
 
 
 def scaled_tanh(x):
@@ -140,18 +168,18 @@ def main(
     print("initialising optimiser...")
     # configure learning rate schedule
     if lr_schedule:
-        pass
+        learning_rate = optax.linear_schedule(learning_rate, learning_rate / num_steps, num_steps)
+
     # configure optimiser
     if opt == 'sgd':
-        pass
+        optimiser = optax.sgd(learning_rate)
     elif opt == 'adam':
-        pass
+        optimiser = optax.adam(learning_rate)
     elif opt == 'adamw':
-        pass
-    # initialise the optimiser state
-    pass
+        optimiser = optax.adamw(learning_rate)
     
-    print(opt_state)
+    # initialise the optimiser state
+    opt_state = optimiser.init(model)
 
 
     print("begin training...")
@@ -179,8 +207,9 @@ def main(
 
 
         # compute update, update optimiser and model
-        pass
-
+        updates, opt_state = optimiser.update(grads, opt_state, model)
+        # model = optax.apply_updates(model, updates)
+        model = jax.tree.map(lambda m, g : m + g, model, updates)
 
         # track metrics
         losses.append((step, loss))
@@ -216,8 +245,8 @@ def batch_cross_entropy(
     x_batch: Float[Array, "b h w"],
     y_batch: Int[Array, "b"],
 ) -> float:
-    raise NotImplementedError
-
+    all_cross_entropies = jax.vmap(cross_entropy, in_axes=(None, 0, 0))(model, x_batch, y_batch)
+    return all_cross_entropies.mean()
 
 def cross_entropy(
     model: SimpLeNet,
@@ -225,7 +254,7 @@ def cross_entropy(
     y: int,
 ) -> float:
     # Cross entropy formula: Hx(q, p) = - Sum_i p(i) log q(i)
-    raise NotImplementedError
+    return -jnp.log(model.forward(x)[y])
 
 
 # def cross_entropy(
