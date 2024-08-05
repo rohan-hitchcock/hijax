@@ -6,39 +6,36 @@ from jaxtyping import PRNGKeyArray as Key, Array, Float
 from tqdm import tqdm
 
 from dln.model import DeepLinearNetwork
-from shared.utils import ExponentialMovingAverage
-from shared.samplers import gradient_descent_step
+from shared.utils import ExponentialMovingAverage, TrainLogger
 
-def train_step(
-        model: DeepLinearNetwork, 
-        true_model: DeepLinearNetwork, 
-        batch: Float[Array, 'batch_size in_dim'], 
-        learning_rate: float
-        ) -> Tuple[DeepLinearNetwork, float]:
+import optax
+from optax import GradientTransformation
 
-    y = true_model(batch)
-    loss, grad_loss = jax.value_and_grad(model.loss)(batch, y)
-    model = gradient_descent_step(model, grad_loss, learning_rate)
-    return model, loss
+from functools import partial
+
+def train(model: DeepLinearNetwork, true_model: DeepLinearNetwork, dataset: Float[Array, 'num_elem batch_size in_dim'], optimizer: GradientTransformation, checkpoint_rate: int = 100):
 
 
-def train(model: DeepLinearNetwork, true_model: DeepLinearNetwork, dataset: Float[Array, 'num_elem batch_size in_dim'], learning_rate: float):
+    optimizer_state = optimizer.init(model)
 
-    ema_loss = ExponentialMovingAverage()
-    with tqdm(enumerate(dataset), total=len(dataset), desc='Training', unit='step') as pbar:
-        for step, batch in pbar:
 
-            model, l = train_step(model, true_model, batch, learning_rate)
 
-            ema_loss.update(l)
+    with TrainLogger(None, 100, len(dataset), enable_plot=False) as logger:
+        for step, x in enumerate(dataset):
 
-            """if checkpoint_dir is not None and step % checkpoint_rate == 0:
-                checkpoint_path = os.path.join(checkpoint_dir, f'step={step}.npz')
-                model.save(checkpoint_path)"""
-            
-            pbar.set_postfix({'loss': f'{ema_loss:.3f}'})
+            model, loss = train_step(model, true_model, optimizer, optimizer_state, x)
+
+            logger.log_step(step, loss, model)
 
     return model
+
+@partial(jax.jit, static_argnames=['optimizer'])
+def train_step(model, true_model, optimizer, optimizer_state, x):
+    y_true = true_model(x)
+    loss, grad_loss = jax.value_and_grad(model.loss)(model, x, y_true)
+    updates, optimizer_state = optimizer.update(grad_loss, optimizer_state, model)
+    model = optax.apply_updates(model, updates)
+    return model, loss
 
 
 def generate_dataset(
@@ -56,4 +53,30 @@ def generate_dataset(
         minval=min_val, 
         maxval=max_val
     )
+
+
+if __name__ == "__main__":
+
+    seed = 0
+
+    key = jax.random.key(seed)
+    key_init_true, key_init_train, key = jax.random.split(key, num=3)
+
+
+    true_model = DeepLinearNetwork.initialize_true(key_init_true, min_layers=5, max_layers=10, min_layer_size=10, max_layer_size=20)
+    model = DeepLinearNetwork.initialize(key_init_train, true_model.layer_sizes)
+
+
+    optimizer = optax.sgd(learning_rate=0.0001)
+
+    num_steps = 10000
+    batch_size = 512
+    key_dataset, key = jax.random.split(key)
+    dataset = generate_dataset(key_dataset, num_steps, batch_size, in_dim=true_model.layer_sizes[0])
+
+    print(true_model.num_parameters)
+    print(dataset.shape)
+
+    
+    train(model, true_model, dataset, optimizer)
 

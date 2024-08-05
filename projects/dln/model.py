@@ -8,6 +8,8 @@ from jaxtyping import Array, PRNGKeyArray as Key, Int, Float
 from dln.dln_llc_constraint_problem import compute_delta_sigma
 from shared.utils import register_model
 
+import math
+
 @register_model(weights=['layers'])
 class DeepLinearNetwork:
 
@@ -27,8 +29,9 @@ class DeepLinearNetwork:
         # the optimal order to several successive matrix multiplications
         return jnp.linalg.multi_dot([x, *self.layers])
 
-    def loss(self, x: Array, y: Array) -> Array:
-        y_pred = self(x)
+    @staticmethod
+    def loss(model, x: Array, y: Array) -> Array:
+        y_pred = model(x)
         return jnp.mean((y - y_pred) ** 2)
 
     @jax.jit
@@ -39,6 +42,10 @@ class DeepLinearNetwork:
     def layer_sizes(self) -> Int[Array, '{len(self.layers) + 1}']:
         sizes = [layer.shape[0] for layer in self.layers]
         return jnp.array(sizes + [self.layers[-1].shape[1]])
+
+    @property
+    def num_parameters(self) -> int:
+        return sum(jnp.size(layer) for layer in self.layers)
 
     @classmethod
     def initialize(cls, key: Key, layer_sizes: List[int]):
