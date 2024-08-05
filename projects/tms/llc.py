@@ -47,7 +47,7 @@ def llc_mean(init_loss, loss_trace, beta):
 
 def llc_moving_mean(init_loss, loss_trace, beta):
     moving_mean_loss = jnp.cumsum(loss_trace) / (jnp.arange(len(loss_trace)) + 1)
-    return beta * (moving_mean_loss - init_loss)
+    return (moving_mean_loss - init_loss) / 2
 
 @partial(jax.jit, static_argnames=['loss_fn', 'num_burnin_steps'])
 def estimate_llc(key, init_weight, data_by_chain, loss_fn, epsilon, gamma, beta, num_burnin_steps):

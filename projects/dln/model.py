@@ -15,13 +15,16 @@ class DeepLinearNetwork:
 
     layers: List[Array]
 
-    def __post_init__(self) -> None:
+    """def __post_init__(self) -> None:
         
+        for layer in self.layers:
+            print(layer.shape)
+
         assert all(len(layer.shape) == 2 for layer in self.layers)
         assert all(
             layer_in.shape[1] == layer_out.shape[0] 
             for layer_in, layer_out in zip(self.layers, self.layers[1:])
-        )
+        )"""
 
     def __call__(self, x: Array) -> Array:
         # x has shape [B, N] where N is the input dimension and B is the batch 
@@ -107,26 +110,26 @@ class DeepLinearNetwork:
         return model
 
 
-def theoretical_llc(true_model: DeepLinearNetwork) -> Float[Array, '1']:
+    def theoretical_llc(self) -> Float[Array, '1']:
 
-    rank = true_model.rank()
-    layer_sizes = true_model.layer_sizes
+        rank = self.rank()
+        layer_sizes = self.layer_sizes
 
-    delta = layer_sizes - rank
+        delta = layer_sizes - rank
 
-    delta_sigma = compute_delta_sigma(delta.tolist())
-    delta_sigma_sum = sum(delta_sigma)
-    ell = len(delta_sigma) - 1
+        delta_sigma = compute_delta_sigma(delta.tolist())
+        delta_sigma_sum = sum(delta_sigma)
+        ell = len(delta_sigma) - 1
 
-    a = delta_sigma_sum - (jnp.ceil(delta_sigma_sum / ell) - 1) * ell
-    
-    llc = (
-        0.5 * (rank ** 2 + rank * (layer_sizes[0] + layer_sizes[-1]))
-        + a * (ell - a) / (4 * ell) 
-        - ell * (ell - 1) / (4 * ell ** 2) * (delta_sigma_sum ** 2)
-        + 0.5 * sum(d1 * d2 for d1, d2 in itertools.combinations(delta_sigma, r=2))
-    )
-    return llc
+        a = delta_sigma_sum - (jnp.ceil(delta_sigma_sum / ell) - 1) * ell
+        
+        llc = (
+            0.5 * (rank ** 2 + rank * (layer_sizes[0] + layer_sizes[-1]))
+            + a * (ell - a) / (4 * ell) 
+            - ell * (ell - 1) / (4 * ell ** 2) * (delta_sigma_sum ** 2)
+            + 0.5 * sum(d1 * d2 for d1, d2 in itertools.combinations(delta_sigma, r=2))
+        )
+        return llc
 
 
 
