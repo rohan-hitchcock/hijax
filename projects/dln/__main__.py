@@ -6,8 +6,11 @@ import jax.numpy as jnp
 
 from dln.model import DeepLinearNetwork
 from dln import llc
-from dln.train import generate_dataset
+from dln.train import generate_dataset, prepare_data, generate_data
 from shared.samplers_optax import SGLD
+
+import matplotlib.pyplot as plt
+
 
 import optax
 
@@ -92,8 +95,9 @@ if __name__ == "__main__":
     parser.add_argument("--num_experiments", type=int, default=100)
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--beta", type=float, default=1.0)
+    parser.add_argument("--epsilon", type=float, default=None)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--batch_size", type=int, default=512)
+    parser.add_argument("--batch_size", type=int, default=500)
     parser.add_argument("--num_chains", type=int, default=1)
     parser.add_argument("--burnin_prop", type=float, default=0.9)
 
@@ -103,55 +107,78 @@ if __name__ == "__main__":
     key = jax.random.key(args.seed)
 
     num_layers_min, num_layers_max, min_width, max_width, epsilon, num_steps, n = get_params(args.oom)
+
+    if args.epsilon is not None:
+        epsilon = args.epsilon
+
     nbeta = llc.nbeta(args.beta, n)
-    # nbeta = llc.nbeta(args.beta, args.batch_size)
+    
     sampler = SGLD(epsilon, args.gamma, nbeta, args.seed)
 
     sample_llc_multichain = jax.jit(jax.vmap(llc.sample_llc, in_axes=(None, None, 0)), static_argnames=['sampler'])
-    # sample_llc_multichain = jax.vmap(llc.sample_llc, in_axes=(None, None, 0))
     
+    loss_fn = lambda m, x, y : jnp.mean((m(x) - y) ** 2)
+    val_grad_loss_fn = jax.value_and_grad(loss_fn)
 
-    
-
-    for _ in tqdm.trange(args.num_experiments):
+    for eid in tqdm.trange(args.num_experiments):
         
         key, key_model = jax.random.split(key)
         init_model = DeepLinearNetwork.initialize_true(key_model, num_layers_min, num_layers_max, min_width, max_width)
 
+        # print(f"{init_model.dim_in=}")
+        # print(f"{init_model.dim_out=}")
+
+
         key, key_data = jax.random.split(key)
-        data = generate_dataset(key_data, args.num_chains * num_steps, args.batch_size, init_model.layer_sizes[0])
-        data = data.reshape((args.num_chains, num_steps, args.batch_size, -1))
+        data = generate_data(key_data, n, init_model.dim_in)
 
 
-        print(data.shape)
-        print(init_model(data[0][0][0]))
+        # print(f"{data.shape=}")
+        outputs = init_model(data)
+
+        # print(f"{outputs.shape=}")
+
+        
 
 
-        loss_fn = lambda updated_model, x : ((init_model(x) - updated_model(x)) ** 2).mean()
-        val_grad_loss_fn = jax.value_and_grad(loss_fn)
+        key, key_dataset = jax.random.split(key)
+        inputs, targets = prepare_data(key_dataset, data, outputs, num_steps, args.batch_size)
+        # print(f"{dataset.shape=}")
 
-        optimizer_state = sampler.init(init_model)
+
+        l = jax.vmap(loss_fn, in_axes=(None, 0, 0))(init_model, inputs, targets).mean()
+        # print("Mean loss ", l)
+
+    
+        # loss_fn = lambda updated_model, x : ((init_model(x) - updated_model(x)) ** 2).mean()
+        
+
+        key, key_sampler = jax.random.split(key)
+
+        optimizer_state = sampler.init(init_model, key_sampler)
         model = init_model
-        for i, x in enumerate(data[0]):
+        trace = []
+        for i, (x, y) in enumerate(zip(inputs, targets)):
 
-            loss, grad_loss = val_grad_loss_fn(model, x)
+            loss, grad_loss = val_grad_loss_fn(model, x, y)
             updates, optimizer_state = sampler.update(grad_loss, optimizer_state, model)
-            model = optax.apply_updates(model, updates)
+            model = jax.tree.map(lambda p, u : p + u, model, updates)
             
+            trace.append(loss)
+            if jnp.isnan(loss):
+                break
             # model = jax.tree.map(lambda w, g: w - 0.00435 * g, model, grad_loss)
             
 
-            print(f"min_grad: {min_tree(grad_loss)}, max_grad={max_tree(grad_loss)}")
+            """print(f"min_grad: {min_tree(grad_loss)}, max_grad={max_tree(grad_loss)}")
             print(f"min_update: {min_tree(updates)}, max_update={max_tree(updates)}")
             print(f"{loss.item()=}")
 
             if jnp.isnan(loss) or i > 30:
-                exit()
+                exit()"""
 
 
-        
-        model = init_model
-
+        """
         traces = sample_llc_multichain(model, sampler, data)
         estimated_llc_per_chain = jax.vmap(llc.estimate_llc, in_axes=(0, None, None))(traces, int(args.burnin_prop * num_steps), nbeta)
 
@@ -159,14 +186,25 @@ if __name__ == "__main__":
         estimated_llc = jnp.mean(estimated_llc_per_chain, where=nan_mask)
 
 
+        
         traces = llc.sample_llc(model, sampler, data[0])
-        estimated_llc = llc.estimate_llc(traces, int(args.burnin_prop * num_steps), nbeta)
+        
+        """
 
-        theoretical_llc = model.theoretical_llc()
+        trace = jnp.array(trace)
+        estimated_llc = llc.estimate_llc(trace, int(args.burnin_prop * num_steps), nbeta)
+
+        moving_llc_estimate = llc.llc_moving_mean(trace[0], trace, nbeta)
+        fig, ax = plt.subplots()
+        ax.plot(trace)
+        plt.savefig(f"debug/exp={eid}.png")
+        plt.close(fig)
+
+        theoretical_llc = init_model.theoretical_llc()
 
 
-        print(model.num_parameters, model.rank(), theoretical_llc, estimated_llc, jnp.count_nonzero(nan_mask))
-        print(traces[:30])
+        print(f"Exp {eid}: ", model.num_parameters, init_model.rank(), theoretical_llc, estimated_llc)
+        
 
         
 

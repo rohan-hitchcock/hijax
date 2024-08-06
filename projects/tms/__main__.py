@@ -17,6 +17,10 @@ from .llc import estimate_llc, llc_sweep
 from .train import train
 from .data import generate_dataset
 
+
+from dln import llc as llc_dln
+from shared.samplers_optax import SGLD
+
 ADJECTIVES = [
         'red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'brown', 'gray', 'black', 'white',
         'happy', 'sad', 'angry', 'calm', 'excited', 'tired', 'energetic', 'peaceful', 'nervous', 'confident',
@@ -228,18 +232,45 @@ if args.sweep:
     exit()
 
 
+# LLC_MODE = 'old'
+LLC_MODE = 'new'
+
 llc_data = generate_dataset(key_llc_data, args.in_dim, args.batch_size, args.num_chains * (args.num_draws + args.num_burnin_steps))
 llc_data = llc_data.reshape(args.num_chains, args.num_draws + args.num_burnin_steps, args.batch_size, args.in_dim)
+
+if LLC_MODE == 'new':
+    sample_llc_multichain = jax.jit(jax.vmap(llc_dln.sample_llc, in_axes=(0, None, None, 0)), static_argnames=['sampler'])
+    nbeta = llc_dln.nbeta(args.beta, args.batch_size)
+    sampler = SGLD(args.epsilon, args.gamma, nbeta, args.seed)
+
 
 for step, ckpt_file in tqdm.tqdm(sorted(get_checkpoints(checkpoint_dir)), desc='LLC estimation', unit='ckpt'):
      
     model = TMSModel.load(ckpt_file)
 
     key, key_llc_estimate = jax.random.split(key)
-    llcs, _ = estimate_llc(key_llc_estimate, model, llc_data, loss_fn, args.epsilon, args.gamma, args.beta, args.num_burnin_steps)
+
+
+    if LLC_MODE == 'new':
+        key_chains = jax.random.split(key_llc_estimate, args.num_chains)
+
+        
+        traces = sample_llc_multichain(key_chains, model, sampler, llc_data)
+        llcs = jax.vmap(llc_dln.estimate_llc, in_axes=(0, None, None))(traces, args.num_burnin_steps, nbeta)
+
+    else:
+        llcs, traces = estimate_llc(key_llc_estimate, model, llc_data, loss_fn, args.epsilon, args.gamma, args.beta, args.num_burnin_steps)
 
     llc_results['step'].append(step)
     llc_results['llc'].append(llcs.mean().item())
+
+
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+for trace in traces:
+    ax.plot(trace)
+plt.show()
 
 llc_results_df = pd.DataFrame(llc_results)
 llc_results_df.to_csv(os.path.join(run_dir, 'llc.csv'))

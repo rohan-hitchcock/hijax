@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 import itertools
 
 import jax
@@ -9,6 +9,15 @@ from dln.dln_llc_constraint_problem import compute_delta_sigma
 from shared.utils import register_model
 
 import math
+
+
+def xavier_uniform_init(key: Key, shape: Tuple[int, int]) -> Float[Array, "shape[0] shape[1]"]:
+    bound = jnp.sqrt(6 / (shape[0] + shape[1]))
+    return jax.random.uniform(key, shape, minval=-bound, maxval=bound)
+
+def xavier_normal_init(key: Key, shape: Tuple[int, int]) -> Float[Array, "shape[0] shape[1]"]:
+    std = jnp.sqrt(2 / (shape[0] + shape[1]))
+    return std * jax.random.normal(key, shape)
 
 @register_model(weights=['layers'])
 class DeepLinearNetwork:
@@ -30,7 +39,12 @@ class DeepLinearNetwork:
         # x has shape [B, N] where N is the input dimension and B is the batch 
         # size, so our vectors are row vectors. jnp.linalg.multi_dot figures out 
         # the optimal order to several successive matrix multiplications
-        return jnp.linalg.multi_dot([x, *self.layers])
+        # return jnp.linalg.multi_dot([x, *self.layers])
+        result = x
+        for layer in self.layers:
+            result = result @ layer
+
+        return result
 
     @staticmethod
     def loss(model, x: Array, y: Array) -> Array:
@@ -49,6 +63,14 @@ class DeepLinearNetwork:
     @property
     def num_parameters(self) -> int:
         return sum(jnp.size(layer) for layer in self.layers)
+    
+    @property
+    def dim_in(self) -> int:
+        return self.layers[0].shape[0]
+    
+    @property
+    def dim_out(self) -> int:
+        return self.layers[-1].shape[1]
 
     @classmethod
     def initialize(cls, key: Key, layer_sizes: List[int]):
@@ -58,8 +80,11 @@ class DeepLinearNetwork:
         shapes = zip(layer_sizes, layer_sizes[1:])
         key_init_layers = jax.random.split(key, num=len(layer_sizes) - 1)
 
-        # TODO check this
-        layers = [jax.random.normal(k, shape) for k, shape in zip(key_init_layers, shapes)]
+        # layers = [jax.random.normal(k, shape) for k, shape in zip(key_init_layers, shapes)]
+        # layers = [jax.random.truncated_normal(k, shape=shape, upper=1, lower=-1) for k, shape in zip(key_init_layers, shapes)]
+        # layers = [jax.random.uniform(k, shape=shape, minval=-0.5, maxval=0.5) for k, shape in zip(key_init_layers, shapes)]
+        layers = [xavier_normal_init(k, shape) for k, shape in zip(key_init_layers, shapes)]
+        # layers = [xavier_uniform_init(k, shape) for k, shape in zip(key_init_layers, shapes)]
 
         return cls(layers=layers)
     

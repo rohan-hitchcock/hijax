@@ -2,11 +2,11 @@ import jax
 import jax.numpy as jnp
 import optax
 from optax import GradientTransformation
-from jaxtyping import Array
+from jaxtyping import Array, Key
 from functools import partial
 
 
-def sample_llc(model, sampler: GradientTransformation, data: Array):
+def sample_llc(key: Key, model, sampler, data: Array):
 
     init_model = model
 
@@ -18,12 +18,12 @@ def sample_llc(model, sampler: GradientTransformation, data: Array):
         model, optimizer_state = carry
         loss, grad_loss = val_grad_loss_fn(model, x)
         updates, optimizer_state = sampler.update(grad_loss, optimizer_state, model)
-        model = optax.apply_updates(model, updates)
+        model = jax.tree.map(lambda p, u : p + u, model, updates)
 
         return (model, optimizer_state), loss
 
 
-    opt_state = sampler.init(model)
+    opt_state = sampler.init(model, key)
     _, trace = jax.lax.scan(step, (init_model, opt_state), data)
 
     return trace
@@ -34,7 +34,7 @@ def llc_mean(init_loss, loss_trace, nbeta):
 
 def llc_moving_mean(init_loss, loss_trace, beta):
     moving_mean_loss = jnp.cumsum(loss_trace) / (jnp.arange(len(loss_trace)) + 1)
-    return (moving_mean_loss - init_loss) / beta
+    return (moving_mean_loss - init_loss) * beta
 
 
 def nbeta(beta, n):
