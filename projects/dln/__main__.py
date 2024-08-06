@@ -1,23 +1,32 @@
 import argparse
 from typing import Literal
-
+import os
+import json
 import jax
 import jax.numpy as jnp
-
+import math
 from dln.model import DeepLinearNetwork
 from dln import llc
-from dln.train import generate_dataset, prepare_data, generate_data
+from dln.train import prepare_data, generate_data
 from shared.samplers_optax import SGLD
+from shared.utils import create_unique_subdirectory
+
+import numpy as np
 
 import matplotlib.pyplot as plt
 
-
+import pandas as pd
 import optax
 
 import tqdm
 
-def get_params(oom_str: Literal['1K', '10K', '100K', '1M', '10M', '100M']):
 
+OUTPUT_DIR = "./dln/results"
+
+NUM_SAVED_TRACES = 9
+
+def get_params(oom_str: Literal['1K', '10K', '100K', '1M', '10M', '100M']):
+    """ Parameters from Furman and Lau. See Appendix E.2"""
     if oom_str == '1K':
         num_layers_min = 2
         num_layers_max = 5
@@ -25,7 +34,7 @@ def get_params(oom_str: Literal['1K', '10K', '100K', '1M', '10M', '100M']):
         max_width = 50
         epsilon = 5e-7
         num_steps = 10000
-        n = 10 ** 5
+        dataset_size = 10 ** 5
 
     elif oom_str == '10K':
         num_layers_min = 2
@@ -34,7 +43,7 @@ def get_params(oom_str: Literal['1K', '10K', '100K', '1M', '10M', '100M']):
         max_width = 100
         epsilon = 5e-7
         num_steps = 10000
-        n = 10 ** 5
+        dataset_size = 10 ** 5
 
     elif oom_str == '100K':
         num_layers_min = 2
@@ -43,7 +52,7 @@ def get_params(oom_str: Literal['1K', '10K', '100K', '1M', '10M', '100M']):
         max_width = 500
         epsilon = 1e-7
         num_steps = 50000
-        n = 10 ** 6
+        dataset_size = 10 ** 6
 
     elif oom_str == '1M':
         num_layers_min = 2
@@ -52,7 +61,7 @@ def get_params(oom_str: Literal['1K', '10K', '100K', '1M', '10M', '100M']):
         max_width = 1000
         epsilon = 5e-8
         num_steps = 50000
-        n = 10 ** 6
+        dataset_size = 10 ** 6
 
     elif oom_str == '10M':
         num_layers_min = 2
@@ -61,7 +70,7 @@ def get_params(oom_str: Literal['1K', '10K', '100K', '1M', '10M', '100M']):
         max_width = 2000
         epsilon = 2e-8
         num_steps = 50000
-        n = 10 ** 6
+        dataset_size = 10 ** 6
 
     elif oom_str == '100M':
         num_layers_min = 2
@@ -70,143 +79,146 @@ def get_params(oom_str: Literal['1K', '10K', '100K', '1M', '10M', '100M']):
         max_width = 3000
         epsilon = 2e-8
         num_steps = 50000
-        n = 10 ** 6
+        dataset_size = 10 ** 6
 
     else:
         raise ValueError(f"'{oom_str}' not recognised")
 
-    return num_layers_min, num_layers_max, min_width, max_width, epsilon, num_steps, n
+    return num_layers_min, num_layers_max, min_width, max_width, epsilon, num_steps, dataset_size
 
 
+def plot_saved_traces(saved_traces, figpath=None):
+    grid_dim = int(math.sqrt(NUM_SAVED_TRACES))
+    fig, axes = plt.subplots(nrows=grid_dim, ncols=grid_dim)
 
-def min_tree(pytree):
-    flat_tree, _ = jax.tree.flatten(pytree)
-    return min(leaf.min() for leaf in flat_tree).item()
+    axes = axes.flatten()
 
-def max_tree(pytree):
-    flat_tree, _ = jax.tree.flatten(pytree)
-    return max(leaf.max() for leaf in flat_tree).item()
+    for ax, traces in zip(axes, saved_traces):
+        for trace in traces:
+            ax.plot(trace)
 
+    if figpath is not None:
+        plt.savefig(figpath)
+    else:
+        plt.show()
+
+    plt.close(fig)
+
+
+def plot_results(results_df, figpath=None):
+
+    fig, ax = plt.subplots()
+
+    ax.scatter(results_df['true_llc'], results_df['estimated_llc'])
+
+    
+    ax_lower_lim = 0
+    ax_upper_lim = max(results_df['true_llc'].max(), results_df['estimated_llc'].max())
+    
+    line = np.linspace(ax_lower_lim, ax_upper_lim)
+    ax.plot(line, line, color='k', alpha=0.5)
+
+    ax.set_xlabel('True LLC')
+    ax.set_ylabel('Estimated LLC')
+
+    ax.set_xlim(left=ax_lower_lim, right=ax_upper_lim)
+    ax.set_ylim(bottom=ax_lower_lim, top=ax_upper_lim)
+
+    if figpath is not None:
+        plt.savefig(figpath)
+    else:
+        plt.show()
+
+    plt.close(fig)
+
+    
+    
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--oom", required=True, choices=['1K', '10K', '100K', '1M', '10M', '100M'])
+    parser.add_argument("--oom", required=True, choices=['1K', '10K', '100K', '1M', '10M', '100M'], help="Order of magnitude of models")
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--num_experiments", type=int, default=100)
+    
+    parser.add_argument("--epsilon", type=float, default=None, help="If set, overwrites default epsilon for given oom")
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--beta", type=float, default=1.0)
-    parser.add_argument("--epsilon", type=float, default=None)
-    parser.add_argument("--seed", type=int, default=0)
+    
     parser.add_argument("--batch_size", type=int, default=500)
     parser.add_argument("--num_chains", type=int, default=1)
-    parser.add_argument("--burnin_prop", type=float, default=0.9)
+    parser.add_argument("--burnin_prop", type=float, default=0.9, help="Proportion of SGLD steps to use for burn-in")
+
+    parser.add_argument("--output_dir", type=str, default=OUTPUT_DIR)
 
 
     args = parser.parse_args()
 
     key = jax.random.key(args.seed)
 
-    num_layers_min, num_layers_max, min_width, max_width, epsilon, num_steps, n = get_params(args.oom)
+    num_layers_min, num_layers_max, min_width, max_width, epsilon, num_steps, dataset_size = get_params(args.oom)
 
-    if args.epsilon is not None:
-        epsilon = args.epsilon
+    num_burnin_steps = int(args.burnin_prop * num_steps)
 
-    nbeta = llc.nbeta(args.beta, n)
-    
-    sampler = SGLD(epsilon, args.gamma, nbeta, args.seed)
+    epsilon = args.epsilon if args.epsilon is not None else epsilon
 
-    sample_llc_multichain = jax.jit(jax.vmap(llc.sample_llc, in_axes=(None, None, 0)), static_argnames=['sampler'])
+    nbeta = llc.nbeta(args.beta, dataset_size)
+    sampler = SGLD(epsilon, args.gamma, nbeta)
     
     loss_fn = lambda m, x, y : jnp.mean((m(x) - y) ** 2)
-    val_grad_loss_fn = jax.value_and_grad(loss_fn)
+    
+    
+    trace_save_freq = args.num_experiments // NUM_SAVED_TRACES
+    saved_traces = []
 
-    for eid in tqdm.trange(args.num_experiments):
+    results = []
+    for i in tqdm.trange(args.num_experiments):
         
         key, key_model = jax.random.split(key)
-        init_model = DeepLinearNetwork.initialize_true(key_model, num_layers_min, num_layers_max, min_width, max_width)
-
-        # print(f"{init_model.dim_in=}")
-        # print(f"{init_model.dim_out=}")
-
+        model = DeepLinearNetwork.initialize_true(key_model, num_layers_min, num_layers_max, min_width, max_width)
+        
+        rank = model.rank()
 
         key, key_data = jax.random.split(key)
-        data = generate_data(key_data, n, init_model.dim_in)
+        xs = generate_data(key_data, dataset_size, model.dim_in)
+        ys = model(xs)
 
-
-        # print(f"{data.shape=}")
-        outputs = init_model(data)
-
-        # print(f"{outputs.shape=}")
+        key, key_sampling = jax.random.split(key)
+        traces = llc.sample_llc_multichain(key, model, sampler, loss_fn, xs, ys, args.num_chains, num_steps, args.batch_size)
 
         
-
-
-        key, key_dataset = jax.random.split(key)
-        inputs, targets = prepare_data(key_dataset, data, outputs, num_steps, args.batch_size)
-        # print(f"{dataset.shape=}")
-
-
-        l = jax.vmap(loss_fn, in_axes=(None, 0, 0))(init_model, inputs, targets).mean()
-        # print("Mean loss ", l)
-
-    
-        # loss_fn = lambda updated_model, x : ((init_model(x) - updated_model(x)) ** 2).mean()
-        
-
-        key, key_sampler = jax.random.split(key)
-
-        optimizer_state = sampler.init(init_model, key_sampler)
-        model = init_model
-        trace = []
-        for i, (x, y) in enumerate(zip(inputs, targets)):
-
-            loss, grad_loss = val_grad_loss_fn(model, x, y)
-            updates, optimizer_state = sampler.update(grad_loss, optimizer_state, model)
-            model = jax.tree.map(lambda p, u : p + u, model, updates)
-            
-            trace.append(loss)
-            if jnp.isnan(loss):
-                break
-            # model = jax.tree.map(lambda w, g: w - 0.00435 * g, model, grad_loss)
-            
-
-            """print(f"min_grad: {min_tree(grad_loss)}, max_grad={max_tree(grad_loss)}")
-            print(f"min_update: {min_tree(updates)}, max_update={max_tree(updates)}")
-            print(f"{loss.item()=}")
-
-            if jnp.isnan(loss) or i > 30:
-                exit()"""
-
-
-        """
-        traces = sample_llc_multichain(model, sampler, data)
-        estimated_llc_per_chain = jax.vmap(llc.estimate_llc, in_axes=(0, None, None))(traces, int(args.burnin_prop * num_steps), nbeta)
-
-        nan_mask = ~jnp.isnan(estimated_llc_per_chain)
-        estimated_llc = jnp.mean(estimated_llc_per_chain, where=nan_mask)
-
+        # L_n(w^*) = 0 here, so \lambda = n\beta E[L_n(w)]
+        estimated_llc_per_chain = jax.vmap(lambda trace : nbeta * jnp.mean(trace))(traces[:,num_burnin_steps:])
 
         
-        traces = llc.sample_llc(model, sampler, data[0])
-        
-        """
+        results.append({
+            'num_params': model.num_parameters, 
+            'true_llc': model.learning_coefficient(), 
+            'rank': model.rank().item(), 
+            'estimated_llc': jnp.mean(estimated_llc_per_chain, where=~jnp.isnan(estimated_llc_per_chain)),
+        } | {
+            f'llc_chain_{i}': llc.item() 
+            for i, llc in enumerate(estimated_llc_per_chain)
+        }
+        )
 
-        trace = jnp.array(trace)
-        estimated_llc = llc.estimate_llc(trace, int(args.burnin_prop * num_steps), nbeta)
-
-        moving_llc_estimate = llc.llc_moving_mean(trace[0], trace, nbeta)
-        fig, ax = plt.subplots()
-        ax.plot(trace)
-        plt.savefig(f"debug/exp={eid}.png")
-        plt.close(fig)
-
-        theoretical_llc = init_model.theoretical_llc()
-
-
-        print(f"Exp {eid}: ", model.num_parameters, init_model.rank(), theoretical_llc, estimated_llc)
-        
-
-        
+        if i % trace_save_freq == 0 and len(saved_traces) < NUM_SAVED_TRACES:
+            saved_traces.append(traces)
 
 
-    
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    exp_dir = create_unique_subdirectory(args.output_dir)
+
+    results_df = pd.DataFrame(results)
+    results_df.to_csv(os.path.join(exp_dir, 'results.csv'))
+
+    plot_results(results_df, figpath=os.path.join(exp_dir, 'results.png'))
+
+    jnp.savez(os.path.join(exp_dir, 'sample_traces.npz'), *saved_traces)
+
+    with open(os.path.join(exp_dir, 'args.json'), 'w') as fp:
+        json.dump(vars(args), fp, indent=4)
+
+    plot_saved_traces(saved_traces, figpath=os.path.join(exp_dir, 'sample_traces.png'))

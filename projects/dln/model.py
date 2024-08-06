@@ -135,7 +135,7 @@ class DeepLinearNetwork:
         return model
 
 
-    def theoretical_llc(self) -> Float[Array, '1']:
+    def learning_coefficient(self) -> Float[Array, '1']:
 
         rank = self.rank()
         layer_sizes = self.layer_sizes

@@ -58,15 +58,12 @@ def generate_dataset(
 def generate_data(key: Key, num_elements: int, dim: int, min_val: float = -10.0, max_val: float = 10.0):
     return jax.random.uniform(key, shape=(num_elements, dim), minval=min_val, maxval=max_val)
 
-
+@partial(jax.jit, static_argnames=['batch_size', 'num_steps'])
 def prepare_data(key: Key, data: Float[Array, 'num_elem dim_in'], outputs, num_steps: int, batch_size: int) -> Float[Array, 'num_batches batch_size dim']:
 
     num_elem, dim_in = data.shape
     steps_per_epoch = num_elem // batch_size
     num_epochs = num_steps // steps_per_epoch
-
-    
-
 
     def make_epoch(k, xs, ys):
 
@@ -84,8 +81,6 @@ def prepare_data(key: Key, data: Float[Array, 'num_elem dim_in'], outputs, num_s
     keys_shuffle = jax.random.split(key, num=num_epochs)
     epochs_xs, epochs_ys = jax.vmap(make_epoch, in_axes=(0, None, None))(keys_shuffle, data, outputs)
     
-
-
     dim_out = epochs_ys.shape[-1]
     return epochs_xs.reshape(-1, batch_size, dim_in), epochs_ys.reshape(-1, batch_size, dim_out)
 
