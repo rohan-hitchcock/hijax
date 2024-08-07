@@ -184,7 +184,7 @@ if __name__ == "__main__":
         ys = model(xs)
 
         key, key_sampling = jax.random.split(key)
-        traces = llc.sample_llc_multichain(key, model, sampler, loss_fn, xs, ys, args.num_chains, num_steps, args.batch_size)
+        traces = llc.sample_llc_multichain(key_sampling, model, sampler, loss_fn, xs, ys, args.num_chains, num_steps, args.batch_size)
 
         
         # L_n(w^*) = 0 here, so \lambda = n\beta E[L_n(w)]
