@@ -212,7 +212,7 @@ if __name__ == "__main__":
     exp_dir = create_unique_subdirectory(args.output_dir)
 
     results_df = pd.DataFrame(results)
-    results_df.to_csv(os.path.join(exp_dir, 'results.csv'))
+    results_df.to_csv(os.path.join(exp_dir, 'results.csv'), index=False)
 
     plot_results(results_df, figpath=os.path.join(exp_dir, 'results.png'))
 

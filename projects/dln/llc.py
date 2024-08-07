@@ -30,12 +30,55 @@ def sample_llc(key: Key, model, sampler, loss_fn, xs: Array, ys: Array):
 
     return trace
 
+
+def sample_weights(key: Key, model, sampler, loss_fn, xs: Array, ys: Array):
+
+    init_model = model
+
+    
+    val_grad_loss_fn = jax.value_and_grad(loss_fn)
+    
+    def step(carry, elem):
+
+        x, y = elem
+        model, optimizer_state = carry
+
+        loss, grad_loss = val_grad_loss_fn(model, x, y)
+        updates, optimizer_state = sampler.update(grad_loss, optimizer_state, model)
+        model = jax.tree.map(lambda p, u : p + u, model, updates)
+
+        return (model, optimizer_state), (loss, model)
+
+
+    opt_state = sampler.init(model, key)
+    _, (loss_trace, weight_trace) = jax.lax.scan(step, (init_model, opt_state), (xs, ys))
+
+    return loss_trace, weight_trace
+
 @partial(jax.jit, static_argnames=['sampler', 'loss_fn', 'num_chains', 'num_steps', 'batch_size'])
 def sample_llc_multichain(key: Key, model, sampler, loss_fn, xs: Array, ys: Array, num_chains, num_steps, batch_size):
 
     prepare_data_multichain = jax.vmap(prepare_data, in_axes=(0, None, None, None, None))
 
     sample_multichain = jax.vmap(sample_llc, in_axes=(0, None, None, None, 0, 0))
+
+    keys = jax.random.split(key, num=num_chains + 1)
+    key, keys_chain_datasets = keys[0], keys[1:]
+    batched_xs_by_chain, batched_ys_by_chain = prepare_data_multichain(keys_chain_datasets, xs, ys, num_steps, batch_size)
+
+    keys_chains = jax.random.split(key, num=num_chains + 1)
+    key, keys_chains = keys[0], keys[1:]
+        
+    traces = sample_multichain(keys_chains, model, sampler, loss_fn, batched_xs_by_chain, batched_ys_by_chain)
+
+    return traces
+
+# @partial(jax.jit, static_argnames=['sampler', 'loss_fn', 'num_chains', 'num_steps', 'batch_size'])
+def sample_weights_multichain(key: Key, model, sampler, loss_fn, xs: Array, ys: Array, num_chains, num_steps, batch_size):
+
+    prepare_data_multichain = jax.vmap(prepare_data, in_axes=(0, None, None, None, None))
+
+    sample_multichain = jax.vmap(sample_weights, in_axes=(0, None, None, None, 0, 0))
 
     keys = jax.random.split(key, num=num_chains + 1)
     key, keys_chain_datasets = keys[0], keys[1:]

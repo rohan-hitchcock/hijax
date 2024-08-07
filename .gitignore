@@ -6,3 +6,4 @@ projects/tms/runs/*
 *.npz
 
 projects/dln/results
+projects/dln/results_normal_crossing
