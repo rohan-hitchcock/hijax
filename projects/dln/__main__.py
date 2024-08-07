@@ -209,7 +209,7 @@ if __name__ == "__main__":
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    exp_dir = create_unique_subdirectory(args.output_dir)
+    exp_dir = create_unique_subdirectory(args.output_dir, tag=args.oom)
 
     results_df = pd.DataFrame(results)
     results_df.to_csv(os.path.join(exp_dir, 'results.csv'), index=False)

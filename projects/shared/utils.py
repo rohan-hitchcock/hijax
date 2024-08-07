@@ -130,14 +130,14 @@ NOUNS = [
     ]
 
 
-def create_unique_subdirectory(base_dir, max_tries=100):
+def create_unique_subdirectory(base_dir, max_tries=100, tag=None):
 
     base_dir = os.path.abspath(base_dir)
 
     for _ in range(max_tries):
         adj = random.choice(ADJECTIVES)
         noun = random.choice(NOUNS)
-        new_dir_name = f"{adj}_{noun}"
+        new_dir_name = f"{adj}_{noun}" if tag is None else f"{tag}_{adj}_{noun}"
         full_path = os.path.join(base_dir, new_dir_name)
 
         try:
