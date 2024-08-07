@@ -10,6 +10,7 @@ from dln import llc
 from dln.train import prepare_data, generate_data
 from shared.samplers_optax import SGLD
 from shared.utils import create_unique_subdirectory
+from matplotlib.colors import LogNorm, Normalize
 
 import numpy as np
 
@@ -105,27 +106,43 @@ def plot_saved_traces(saved_traces, figpath=None):
     plt.close(fig)
 
 
-def plot_results(results_df, figpath=None):
+def plot_results(results_df, figpath=None, log_plot=True):
+    fig, ax = plt.subplots(figsize=(10, 8))
 
-    fig, ax = plt.subplots()
+    if log_plot:
+        norm = LogNorm(vmin=results_df['num_params'].min(), vmax=results_df['num_params'].max())
+    else:
+        norm = Normalize(vmin=results_df['num_params'].min(), vmax=results_df['num_params'].max())
 
-    ax.scatter(results_df['true_llc'], results_df['estimated_llc'])
+    scatter = ax.scatter(
+        results_df['true_llc'], 
+        results_df['estimated_llc'],
+        c=results_df['num_params'], 
+        norm=norm,
+        cmap='plasma'
+    )
 
-    
-    ax_lower_lim = 0
+    ax_lower_lim = min(results_df['true_llc'].min(), results_df['estimated_llc'].min())
     ax_upper_lim = max(results_df['true_llc'].max(), results_df['estimated_llc'].max())
     
     line = np.linspace(ax_lower_lim, ax_upper_lim)
-    ax.plot(line, line, color='k', alpha=0.5)
+    ax.plot(line, line, color='k', linestyle='--', alpha=0.5)
+
+    if log_plot:
+        ax.set_yscale('log')
+        ax.set_xscale('log')
 
     ax.set_xlabel('True LLC')
     ax.set_ylabel('Estimated LLC')
 
-    ax.set_xlim(left=ax_lower_lim, right=ax_upper_lim)
-    ax.set_ylim(bottom=ax_lower_lim, top=ax_upper_lim)
+    ax.set_xlim(ax_lower_lim, ax_upper_lim)
+    ax.set_ylim(ax_lower_lim, ax_upper_lim)
+
+    cbar = plt.colorbar(scatter)
+    cbar.set_label('Number of Parameters')
 
     if figpath is not None:
-        plt.savefig(figpath)
+        plt.savefig(figpath, dpi=300, bbox_inches='tight')
     else:
         plt.show()
 
