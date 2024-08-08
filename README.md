@@ -46,9 +46,9 @@ numbered 1 through 9:
 * `workshop4`: Convolutional neural network using `equinox.nn`, `jax.vmap`
   and `optax`.
 
-* `workshop5`: Residual convolutional neural network using `jax.jit`.
+* `workshop5`: Accelerated convolutional neural network using `jax.jit`.
 
-* `workshop6`: Byte transformer using `jax.jit`.
+* `workshop6`: Accelerated byte transformer using `jax.jit`.
 
 * `workshop7`: Accelerated training loop using `jax.lax.scan`.
 
