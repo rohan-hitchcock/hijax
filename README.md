@@ -1,4 +1,22 @@
-Hi, JAX!
+This is my fork of the [hijax course](https://far.in.net/hijax) repository. 
+It contains the work I did when completing the course. In addition to the
+worksheets, some highlights unique to this fork are:
+- Local learning coefficient estimation for a [toy model of superposition](https://arxiv.org/abs/2310.06301). See [here](./projects/tms).
+
+
+https://github.com/user-attachments/assets/3e85cdd2-3912-4a4d-a7ba-5a408651cc3b
+
+
+
+- Reproduction of local learning coefficient results in deep linear networks from [this paper](http://arxiv.org/abs/2402.03698). See [here](./projects/tms).
+
+
+
+![result](https://github.com/user-attachments/assets/ed27901e-4e81-42ac-bac2-b0f7ed155d1d)
+
+--------
+
+Original ReadMe
 ========
 
 "Hi, JAX!" is a short introduction to [JAX](https://jax.readthedocs.io/) for
