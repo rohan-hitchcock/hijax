@@ -149,7 +149,7 @@ class DeepLinearNetwork:
         a = delta_sigma_sum - (jnp.ceil(delta_sigma_sum / ell) - 1) * ell
         
         llc = (
-            0.5 * (rank ** 2 + rank * (layer_sizes[0] + layer_sizes[-1]))
+            0.5 * (-(rank ** 2) + rank * (layer_sizes[0] + layer_sizes[-1]))
             + a * (ell - a) / (4 * ell) 
             - ell * (ell - 1) / (4 * ell ** 2) * (delta_sigma_sum ** 2)
             + 0.5 * sum(d1 * d2 for d1, d2 in itertools.combinations(delta_sigma, r=2))
